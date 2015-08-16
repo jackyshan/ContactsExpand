@@ -1,113 +1,87 @@
+![](image/contacts_expand.png)
 
-![](image/ios_http_download.png)
-
-##网络
-
-* 采用MKNetworkKit库
-* 网络下载代码封装
-
+##Model
 ```
-MKNetworkOperation *operation = [[MKNetworkOperation alloc] initWithURLString:@"http://mr3.douban.com/201508152125/c7afbeeb3248c382aac7811330bb898c/view/song/small/p1469094_128k.mp4" params:nil httpMethod:@"Get"];
-[operation addHeader:@"Range" withValue:[NSString stringWithFormat:@"bytes=%llu-", [self _getCacheFileSize:[self _savePath]]]];
-[operation addDownloadStream:[NSOutputStream outputStreamToFileAtPath:[self _savePath] append:YES]];
-__weak __typeof(self) weakSelf = self;
-[operation onDownloadProgressChanged:^(double progress) {
-    NSLog(@"%.2f", progress);
-    
-    [weakSelf.progressBtn setTitle:[NSString stringWithFormat:@"%.f%%", progress * 100] forState:UIControlStateNormal];
-    [weakSelf.progressBtn setProgress:progress];
-    if (progress == 1) {
-        weakSelf.progressBtn.userInteractionEnabled = NO;
-    }
-}];
-```
+@interface StreetArea : NSObject
 
-`[operation addHeader:@"Range" withValue:[NSString stringWithFormat:@"bytes=%llu-", [self _getCacheFileSize:[self _savePath]]]];`添加Range头部，获取已下载的文件的字节，断点续传
+@property (nonatomic, strong) NSString *street;//街道名称
+@property (nonatomic, strong) NSString *areaId;//区id
 
-`[operation addDownloadStream:[NSOutputStream outputStreamToFileAtPath:[self _savePath] append:YES]];`字节流输出到_savePath路径，append:YES在字节尾部添加
+@end
 
-`[operation onDownloadProgressChanged:^(double progress) {
-    NSLog(@"%.2f", progress);
-}];`下载进度更新block，可以在block里面更新UI
+@protocol StreetArea
 
-##进度条UI
+@end
 
-* 封装CircularProgressButton
+@interface DistrictArea : NSObject
 
-画圆方法
+@property (nonatomic, strong) NSString *district;//区域名称
+@property (nonatomic, strong) NSArray<StreetArea> *streetList;//街道列表
+@property (nonatomic, assign) BOOL selected;//被选中
 
-```
-- (void)drawRect:(CGRect)rect
-{
-    [super drawRect:rect];
-    //draw background circle
-    UIBezierPath *backCircle = [UIBezierPath bezierPathWithArcCenter:CGPointMake(CGRectGetWidth(self.bounds) / 2, CGRectGetHeight(self.bounds) / 2)
-                                                              radius:(CGRectGetWidth(self.bounds) - self.lineWidth ) / 2
-                                                          startAngle:(CGFloat) - M_PI_2
-                                                            endAngle:(CGFloat)(1.5 * M_PI)
-                                                           clockwise:YES];
-    [self.backColor setStroke];
-    backCircle.lineWidth = self.lineWidth;
-    [backCircle stroke];
-    
-    if (self.progress) {
-        //draw progress circle
-        UIBezierPath *progressCircle = [UIBezierPath bezierPathWithArcCenter:CGPointMake(CGRectGetWidth(self.bounds) / 2,CGRectGetHeight(self.bounds) / 2)
-                                                                      radius:(CGRectGetWidth(self.bounds) - self.lineWidth ) / 2
-                                                                  startAngle:(CGFloat) - M_PI_2
-                                                                    endAngle:(CGFloat)(- M_PI_2 + self.progress * 2 * M_PI)
-                                                                   clockwise:YES];
-        [self.progressColor setStroke];
-        progressCircle.lineWidth = self.lineWidth;
-        [progressCircle stroke];
-    }
-}
+@end
+
+@protocol DistrictArea
+
+@end
+
+@interface CityArea : NSObject
+
+@property (nonatomic, strong) NSString *city;//城市名称
+@property (nonatomic, strong) NSArray<DistrictArea> *districtList;//区域列表
+@property (nonatomic, assign) BOOL selected;//被选中
+
+@end
+
+@protocol CityArea
+
+@end
+
+@interface ProvinceArea : NSObject
+
+@property (nonatomic, strong) NSString *province;//省级名称
+@property (nonatomic, strong) NSArray<CityArea> *cityList;//城市列表
+@property (nonatomic, assign) BOOL selected;//被选中
+
+@end
 ```
 
-更新进度
+__省市区街道__
+
+省ProvinceArea的model包含城市列表cityList，市CityArea的model包含区域列表districtList
+
+##实现
+```
+_contactsArr = [NSMutableArray array];
+```
+初始化一个可变数组
+
 
 ```
-- (void)setProgress:(float)progress
-{
-    _progress = progress;
-    [self setNeedsDisplay];
-    [self setNeedsLayout];
-    if (self.delegate && [self.delegate respondsToSelector:@selector(updateProgressViewWithProgress:)]) {
-        [self.delegate updateProgressViewWithProgress:self.progress];
-    }
-}
+if (cityModel.selected) {//被选中了，哈哈
+            if (cityModel.districtList.count <= 0) {
+                cityModel.selected = !cityModel.selected;
+                NSLog(@"无区级列表!");return;
+            }
+            [_contactsArr insertObjects:cityModel.districtList atIndexes:sets];
+            [tableView beginUpdates];
+            [tableView insertRowsAtIndexPaths:paths withRowAnimation:UITableViewRowAnimationMiddle];
+            [tableView endUpdates];
+            [tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+            [tableView scrollToRowAtIndexPath:paths[cityModel.districtList.count-1]
+                             atScrollPosition:UITableViewScrollPositionBottom animated:YES];
+        }
+        else //没有选中，😄
+        {
+            [_contactsArr removeObjectsAtIndexes:sets];
+            [tableView beginUpdates];
+            [tableView deleteRowsAtIndexPaths:paths withRowAnimation:UITableViewRowAnimationMiddle];
+            [tableView endUpdates];
+            [tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+        }
 ```
+每个model加了一个selected字段，判断该model是否selected，_contactsArr数组根据model的selected相应删除或添加model的list数组。
 
-初始化方法
+`层数越多，判断逻辑越复杂`
 
-```
-- (id)initWithFrame:(CGRect)frame
-          backGressColor:(UIColor *)backColor
-      progressColor:(UIColor *)progressColor
-          lineWidth:(CGFloat)lineWidth
-{
-    self = [super initWithFrame:frame];
-    if (self) {
-        _progressColor = progressColor;
-        _lineWidth = lineWidth;
-        _backColor = backColor;
-    }
-    return self;
-}
-```
-
-* 使用进度条
-
-```
-CircularProgressButton *progressBtn = [[CircularProgressButton alloc] initWithFrame:CGRectMake(50, 100, 100, 100)
-                                                                     backGressColor:[UIColor grayColor]
-                                                                      progressColor:[UIColor greenColor]
-                                                                          lineWidth:5.f];
-[progressBtn setTitleColor:[UIColor brownColor] forState:UIControlStateNormal];
-[progressBtn setTitle:[NSString stringWithFormat:@"%.f%%", 0.0 * 100] forState:UIControlStateNormal];
-progressBtn.selected = NO;
-[self.view addSubview:progressBtn];
-self.progressBtn = progressBtn;
-
-[progressBtn addTarget:self action:@selector(_downloadAction:) forControlEvents:UIControlEventTouchUpInside];
-```
+`上面的一串的代码只是最简单的两层折叠`
