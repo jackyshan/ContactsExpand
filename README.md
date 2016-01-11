@@ -1,4 +1,4 @@
-![](image/contacts_expand.png)
+![](image/列表展开.gif)
 
 ##Model
 ```
